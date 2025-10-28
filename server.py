@@ -53,6 +53,27 @@ def load_last_sent_date():
         print("[load_last_sent_date] 에러:", e)
         return None
 
+@app.route("/force_send", methods=["POST"])
+def force_send():
+    data = load_timer_state()
+    if data is None:
+        return jsonify({"ok": False, "error": "no data"}), 400
+
+    coins = int(data.get("coins", 0))
+    secs = int(data.get("today_on_seconds", 0))
+    today_str = date.today().isoformat()
+
+    try:
+        send_daily_email(
+            summary_date=today_str,          # 어제가 아니라 '지금 날짜'
+            secs=secs,
+            coins=coins,
+        )
+        return jsonify({"ok": True, "sent_for": today_str})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 def save_last_sent_date(d: str):
     try:
         with open(STATE_FILE, "wb") as f:
@@ -157,3 +178,4 @@ def start_watcher():
     t.start()
 
 start_watcher()
+
