@@ -11,7 +11,7 @@ DATA_FILE = "coin_data.pkl"
 STATE_FILE = "email_state.pkl"
 CHECK_INTERVAL_SEC = 30
 
-SMTP_HOST     = "studyhard9024@gmail.com"
+SMTP_HOST     = ""smtp.gmail.com""
 SMTP_PORT     = 587
 SMTP_USER     = os.getenv("SMTP_USER") #studyhard9024@gmail.com
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD") #ofrx gxom ksfp lzrs
@@ -178,4 +178,5 @@ def start_watcher():
     t.start()
 
 start_watcher()
+
 
