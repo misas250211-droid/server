@@ -10,7 +10,6 @@ from flask import Flask, jsonify, request
 DATA_FILE = "coin_data.pkl"
 STATE_FILE = "email_state.pkl"
 CHECK_INTERVAL_SEC = 30
-
 SMTP_HOST     = "smtp.gmail.com"
 SMTP_PORT     = 587
 SMTP_USER     = os.getenv("SMTP_USER")      # 예: studyhard9024@gmail.com
@@ -177,6 +176,7 @@ def start_watcher():
     t.start()
 
 start_watcher()
+
 
 
 
