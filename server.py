@@ -137,6 +137,27 @@ def upload_state():
     if UPLOAD_TOKEN and client_token != UPLOAD_TOKEN:
         return jsonify({"ok": False, "error": "invalid token"}), 403
 
+@app.route("/force_send", methods=["POST"])
+def force_send():
+    data = load_timer_state()
+    if data is None:
+        return jsonify({"ok": False, "error": "no data"}), 400
+
+    coins = int(data.get("coins", 0))
+    secs = int(data.get("today_on_seconds", 0))
+    today_str = date.today().isoformat()
+
+    try:
+        send_daily_email(
+            summary_date=today_str,   # 오늘 날짜 기준으로 강제 전송
+            secs=secs,
+            coins=coins,
+        )
+        return jsonify({"ok": True, "sent_for": today_str})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
     timer_data = request.json.get("data")
     if not isinstance(timer_data, dict):
         return jsonify({"ok": False, "error": "data must be dict"}), 400
@@ -157,6 +178,7 @@ def start_watcher():
     t.start()
 
 start_watcher()
+
 
 
 
