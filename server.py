@@ -17,10 +17,6 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 EMAIL_TO = os.getenv("EMAIL_TO")
 UPLOAD_TOKEN = os.getenv("UPLOAD_TOKEN")
 
-if not SMTP_USER or not SMTP_PASSWORD or not EMAIL_TO:
-    print("[메일 SKIP] SMTP_USER/SMTP_PASSWORD/EMAIL_TO 중 누락 있음")
-    # return or raise
-
 #포트 자동 전환 옵션
 USE_SSL = str(os.getenv("SMTP_SSL", "false")).lower() == "true"
 if USE_SSL:
@@ -259,6 +255,7 @@ def start_watcher():
     t.start()
 
 start_watcher()
+
 
 
 
