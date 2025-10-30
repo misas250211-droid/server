@@ -10,13 +10,27 @@ from flask import Flask, jsonify, request
 DATA_FILE = "coin_data.pkl"
 STATE_FILE = "email_state.pkl"
 CHECK_INTERVAL_SEC = 30
-SMTP_HOST     = "smtp.gmail.com"
-SMTP_PORT     = 587
-SMTP_USER     = os.getenv("SMTP_USER")      # 예: studyhard9024@gmail.com
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")  # 예: ofrx gxom ksfp lzrs (앱 비번)
-EMAIL_TO      = os.getenv("EMAIL_TO")       # 예: misa.s250211@ggh.goe.go.kr
-UPLOAD_TOKEN  = os.getenv("UPLOAD_TOKEN")   # 예: supersecret123
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))  
+SMTP_USER = os.getenv("SMTP_USER")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+EMAIL_TO = os.getenv("EMAIL_TO")
+UPLOAD_TOKEN = os.getenv("UPLOAD_TOKEN")
 
+if not SMTP_USER or not SMTP_PASSWORD or not EMAIL_TO:
+    print("[메일 SKIP] SMTP_USER/SMTP_PASSWORD/EMAIL_TO 중 누락 있음")
+    # return or raise
+
+#포트 자동 전환 옵션
+USE_SSL = str(os.getenv("SMTP_SSL", "false")).lower() == "true"
+if USE_SSL:
+    with smtplib.SMTP_SSL(SMTP_HOST, 465, context=context, timeout=20) as server:
+        ...
+else:
+    with smtplib.SMTP(SMTP_HOST, 587, timeout=20) as server:
+        server.starttls(context=context)
+        ...
+        
 def fmt_hms(seconds: int) -> str:
     h = seconds // 3600
     m = (seconds % 3600) // 60
@@ -202,6 +216,23 @@ def health():
         "last_sent_for_date": last_sent,
     })
 
+@app.route("/force_send", methods=["POST"])
+def force_send():
+    """서버에 저장된 최신 상태로 '오늘 날짜' 기준 즉시 메일 발송(디버그용)."""
+    data = load_timer_state()
+    if not data:
+        return jsonify({"ok": False, "error": "no data (coin_data.pkl 없음)"}), 400
+
+    coins = int(data.get("coins", 0))
+    secs = int(data.get("today_on_seconds", 0))
+    today_str = date.today().isoformat()
+
+    try:
+        send_daily_email(today_str, secs, coins)
+        return jsonify({"ok": True, "sent_for": today_str})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 @app.route("/upload_state", methods=["POST"])
 def upload_state():
     client_token = request.json.get("token")
@@ -222,33 +253,13 @@ def upload_state():
 
     return jsonify({"ok": True})
 
-# 강제 메일 전송 테스트 라우트 (지금 바로 전송)
-@app.route("/force_send", methods=["POST"])
-def force_send():
-    data = load_timer_state()
-    if data is None:
-        return jsonify({"ok": False, "error": "no data"}), 400
-
-    coins = int(data.get("coins", 0))
-    secs = int(data.get("today_on_seconds", 0))
-    today_str = date.today().isoformat()
-
-    try:
-        send_daily_email(
-            summary_date=today_str,   # 오늘 날짜로 강제 전송
-            secs=secs,
-            coins=coins,
-        )
-        return jsonify({"ok": True, "sent_for": today_str})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
 # Render에서 gunicorn이 app을 불러올 때 watcher도 시작
 def start_watcher():
     t = threading.Thread(target=watcher_loop, args=(app,), daemon=True)
     t.start()
 
 start_watcher()
+
 
 
 
