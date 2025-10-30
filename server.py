@@ -81,26 +81,56 @@ def save_last_sent_date(d: str):
         print("[save_last_sent_date] 에러:", e)
 
 def send_daily_email(summary_date: str, secs: int, coins: int):
+    """Gmail SMTP로 일자별 요약 메일 전송 (진단 로그 강화)."""
     if not SMTP_USER or not SMTP_PASSWORD or not EMAIL_TO:
-        print("[메일 SKIP] SMTP 설정이 비어 있음")
+        print("[메일 SKIP] SMTP 환경변수 부족(SMTP_USER/SMTP_PASSWORD/EMAIL_TO)")
         return
 
-    subject = f"[학습 타이머] {summary_date} 공부 보고서"
-    body_lines = [
-        f"📅 날짜: {summary_date}",
-        f"⏱ 공부 가동 시간: {fmt_hms(secs)} ({secs}초)",
-        f"💰 적립 코인: {coins}",
-        "",
-        "오늘도 수고했어요.",
-    ]
-    body = "\n".join(body_lines)
-
-    msg = (
-        f"Subject: {subject}\n"
-        f"To: {EMAIL_TO}\n"
-        f"From: {SMTP_USER}\n\n"
-        f"{body}"
+    subj = f"[학습 타이머] {summary_date} 공부 보고서"
+    body = (
+        f" 날짜: {summary_date}\n"
+        f" 공부 가동 시간: {fmt_hms(secs)} ({secs}초)\n"
+        f" 적립 코인: {coins}\n\n"
+        "오늘도 수고했어요."
     )
+
+    # RFC에 맞는 헤더 구성(UTF-8)
+    msg = EmailMessage()
+    msg["Subject"] = subj
+    msg["From"] = SMTP_USER
+    msg["To"] = EMAIL_TO
+    msg.set_content(body, subtype="plain", charset="utf-8")
+
+    try:
+        # 587(TLS) 경로. 만약 465를 쓰면 SMTP_SSL로 교체.
+        context = ssl.create_default_context()
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
+            print(f"[SMTP] 서버 연결 시도: {SMTP_HOST}:{SMTP_PORT}")
+            server.ehlo()
+            if SMTP_PORT == 587:
+                server.starttls(context=context)
+                server.ehlo()
+                print("[SMTP] STARTTLS 완료")
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            print(f"[SMTP] 로그인 성공: user={SMTP_USER}")
+            server.send_message(msg)
+            print(f"[메일 전송 완료] {summary_date}: {fmt_hms(secs)} / {coins}코인 → {EMAIL_TO}")
+    except smtplib.SMTPAuthenticationError as e:
+        print("[메일 실패] 인증 오류(앱 비밀번호/SMTP_USER 확인 필요):", e)
+        traceback.print_exc()
+        raise
+    except smtplib.SMTPRecipientsRefused as e:
+        print("[메일 실패] 수신자 거부(EMAIL_TO 정책/오타 가능):", e)
+        traceback.print_exc()
+        raise
+    except smtplib.SMTPException as e:
+        print("[메일 실패] SMTP 예외:", e)
+        traceback.print_exc()
+        raise
+    except Exception as e:
+        print("[메일 실패] 일반 예외:", e)
+        traceback.print_exc()
+        raise
 
     context = ssl.create_default_context()
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
@@ -219,6 +249,7 @@ def start_watcher():
     t.start()
 
 start_watcher()
+
 
 
 
