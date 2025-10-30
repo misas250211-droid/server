@@ -23,6 +23,27 @@ def fmt_hms(seconds: int) -> str:
     s = seconds % 60
     return f"{h:02}:{m:02}:{s:02}"
 
+def load_state():
+    if not os.path.exists(STATE_FILE):
+        return {"last_sent_for_date": None, "last_snapshot": None}
+    try:
+        with open(STATE_FILE, "rb") as f:
+            st = pickle.load(f)
+        # 호환성: 기존 키만 있는 경우 채워주기
+        if "last_snapshot" not in st:
+            st["last_snapshot"] = None
+        return st
+    except Exception as e:
+        print("[load_state] 에러:", e)
+        return {"last_sent_for_date": None, "last_snapshot": None}
+
+def save_state(state: dict):
+    try:
+        with open(STATE_FILE, "wb") as f:
+            pickle.dump(state, f)
+    except Exception as e:
+        print("[save_state] 에러:", e)
+        
 def load_timer_state():
     if not os.path.exists(DATA_FILE):
         return None
@@ -93,26 +114,48 @@ def watcher_loop(app):
     print("[watcher] 시작")
     with app.app_context():
         while True:
-            data = load_timer_state()
+            data = load_timer_state()  # coin_data.pkl
             if data is not None:
-                coins = int(data.get("coins", 0))
-                today_on_seconds = int(data.get("today_on_seconds", 0))
+                cur = {
+                    "date": data.get("date"),  # studytime.py에서 올라오는 '오늘 날짜'
+                    "secs": int(data.get("today_on_seconds", 0)),
+                    "coins": int(data.get("coins", 0)),
+                }
 
-                today = date.today()
-                yesterday = today - timedelta(days=1)
-                yesterday_str = yesterday.isoformat()
+                state = load_state()
+                snap = state.get("last_snapshot")  # {"date": "...", "secs": int, "coins": int} or None
+                last_sent = state.get("last_sent_for_date")
 
-                last_sent = load_last_sent_date()
-                if last_sent != yesterday_str:
-                    try:
-                        send_daily_email(
-                            summary_date=yesterday_str,
-                            secs=today_on_seconds,
-                            coins=coins,
-                        )
-                        save_last_sent_date(yesterday_str)
-                    except Exception as e:
-                        print("[watcher] 메일 전송 실패:", e)
+                if snap is None:
+                    # 최초 진입: 현재 스냅샷 저장만
+                    state["last_snapshot"] = cur
+                    save_state(state)
+
+                else:
+                    if cur["date"] != snap["date"]:
+                        # 날짜가 바뀌었음을 감지 (클라이언트가 리셋된 직후 첫 업로드)
+                        #  → '어제'의 최종값 = snap 으로 메일 전송
+                        if last_sent != snap["date"]:
+                            try:
+                                send_daily_email(
+                                    summary_date=snap["date"],
+                                    secs=snap["secs"],
+                                    coins=snap["coins"],
+                                )
+                                state["last_sent_for_date"] = snap["date"]
+                                print(f"[watcher] {snap['date']} 메일 전송 완료")
+                            except Exception as e:
+                                print("[watcher] 메일 전송 실패:", e)
+
+                        # 새 날의 스냅샷으로 교체
+                        state["last_snapshot"] = cur
+                        save_state(state)
+
+                    else:
+                        # 같은 날이면 최신 값으로 스냅샷 갱신(변화 있을 때만)
+                        if (cur["secs"] != snap["secs"]) or (cur["coins"] != snap["coins"]):
+                            state["last_snapshot"] = cur
+                            save_state(state)
 
             time.sleep(CHECK_INTERVAL_SEC)
 
@@ -149,7 +192,7 @@ def upload_state():
 
     return jsonify({"ok": True})
 
-# 🔥 강제 메일 전송 테스트 라우트 (지금 바로 전송)
+# 강제 메일 전송 테스트 라우트 (지금 바로 전송)
 @app.route("/force_send", methods=["POST"])
 def force_send():
     data = load_timer_state()
@@ -176,6 +219,8 @@ def start_watcher():
     t.start()
 
 start_watcher()
+
+
 
 
 
