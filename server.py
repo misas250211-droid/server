@@ -12,7 +12,7 @@ from flask import Flask, jsonify, request
 # ---------------------- 설정 ----------------------
 DATA_FILE = "coin_data.pkl"
 STATE_FILE = "email_state.pkl"
-CHECK_INTERVAL_SEC = 30
+CHECK_INTERVAL_SEC = 60
 
 # 환경변수 (Render에서 설정)
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
@@ -239,5 +239,6 @@ start_watcher()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
+
 
 
